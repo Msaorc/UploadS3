@@ -3,9 +3,10 @@ package main
 import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"os"
+	"sync"
 )
 
-var uploaded {
+var {
 	s3Client *s3.S3
 	s3Bucket string
 }
@@ -30,11 +31,12 @@ func init() {
 
 func main() {
 	dir, err := os.Open("./tmp")
+	var wg sync.WaitGroup
 	if err != nil {
 		panic(err)
 	}
 	defer dir.Close()
-
+	uploadControl := make(chan struct{}, 100)
 	for {
 		files, err := dir.ReadDir(1)
 		if err != nil {
@@ -44,15 +46,20 @@ func main() {
 			fmt.Printf("Error reading directory: %s \n", err)
 			continue
 		}
-		uploadFile(files[0].Name())
+		wg.Add(1)
+		uploadControl <- struct{}{}
+		go uploadFile(files[0].Name())
 	}
+	wg.Wait()
 }
 
-func uploadFile(filename string) {
+func uploadFile(filename string, uploadControl <-chan struct{}) {
+	defer wg.Done();
 	completeFileName := fmt.Sprint("./tmp/%s", filename)
 	f, err := os.Open(completeFileName)
 	if err != nil {
 		fmt.Printf("Error opening file %s\n", completeFileName)
+		<-uploadControl
 	}
 	defer f.Close()
 	_, err = s3Client.PutObject(&s3.PutObjectInput{
@@ -63,7 +70,9 @@ func uploadFile(filename string) {
 
 	if err != nil {
 		fmt.Printf("Error uploading file %s\n", completeFileName)
+		<-uploadControl
 	}
 
 	fmt.Printf("File %s uploaded successfull\n", completeFileName)
+	<-uploadControl
 }
