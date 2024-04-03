@@ -36,7 +36,7 @@ func main() {
 		panic(err)
 	}
 	defer dir.Close()
-	uploadControl := make(chan struct{}, 100)
+	uploadControl := make(chan struct{}, 200)
 	for {
 		files, err := dir.ReadDir(1)
 		if err != nil {
